@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -75,7 +74,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
 
   Future<void> _initBrightness() async {
     try {
-      final brightness = await ScreenBrightness().application;
+      final brightness = await ScreenBrightness().current;
       if (mounted) {
         ref.read(videoBrightnessProvider.notifier).state = brightness;
         _dragBrightness = brightness;
@@ -140,7 +139,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     WakelockPlus.disable();
     _controlsTimer?.cancel();
     // Restore system brightness
-    ScreenBrightness().resetApplicationScreenBrightness();
+    ScreenBrightness().resetScreenBrightness();
     SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();
@@ -314,7 +313,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
           _dragBrightness = (_panStartBrightness + normalizedDelta).clamp(0.0, 1.0);
           ref.read(videoBrightnessProvider.notifier).state = _dragBrightness;
           // Apply actual screen brightness
-          ScreenBrightness().setApplicationScreenBrightness(_dragBrightness);
+          ScreenBrightness().setScreenBrightness(_dragBrightness);
           setState(() {
             _showBrightnessOverlay = true;
             _showVolumeOverlay = false;
