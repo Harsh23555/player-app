@@ -91,6 +91,11 @@ public final class GeneratedPluginRegistrant {
       Log.e(TAG, "Error registering plugin photo_manager, com.fluttercandies.photo_manager.PhotoManagerPlugin", e);
     }
     try {
+      flutterEngine.getPlugins().add(new com.aaassseee.screen_brightness_android.ScreenBrightnessAndroidPlugin());
+    } catch (Exception e) {
+      Log.e(TAG, "Error registering plugin screen_brightness_android, com.aaassseee.screen_brightness_android.ScreenBrightnessAndroidPlugin", e);
+    }
+    try {
       flutterEngine.getPlugins().add(new dev.fluttercommunity.plus.share.SharePlusPlugin());
     } catch (Exception e) {
       Log.e(TAG, "Error registering plugin share_plus, dev.fluttercommunity.plus.share.SharePlusPlugin", e);
