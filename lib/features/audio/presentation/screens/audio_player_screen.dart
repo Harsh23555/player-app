@@ -12,6 +12,7 @@ import '../../../../shared/widgets/common_widgets.dart';
 import '../../providers/audio_player_provider.dart';
 import '../../providers/audio_library_provider.dart';
 import '../../providers/sleep_timer_provider.dart';
+import '../widgets/equalizer_sheet.dart';
 
 class AudioPlayerScreen extends ConsumerStatefulWidget {
   final AudioModel? initialAudio;
@@ -584,6 +585,16 @@ class _AudioPlayerScreenState extends ConsumerState<AudioPlayerScreen>
               },
             ),
             ListTile(
+              leading: const Icon(Icons.equalizer_rounded),
+              title: const Text('Equalizer'),
+              subtitle: const Text('Adjust audio frequencies',
+                  style: TextStyle(fontSize: 12)),
+              onTap: () {
+                Navigator.pop(ctx);
+                _showEqualizer(context);
+              },
+            ),
+            ListTile(
               leading: const Icon(Icons.share_rounded),
               title: const Text('Share'),
               onTap: () => Navigator.pop(ctx),
@@ -596,6 +607,18 @@ class _AudioPlayerScreenState extends ConsumerState<AudioPlayerScreen>
           ],
         ),
       ),
+    );
+  }
+
+  void _showEqualizer(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppTheme.darkSurface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => const EqualizerSheet(),
     );
   }
 

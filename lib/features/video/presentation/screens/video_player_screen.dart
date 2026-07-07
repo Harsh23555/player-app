@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:screen_brightness/screen_brightness.dart';
 import 'package:video_player/video_player.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
@@ -35,7 +36,10 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   double _dragBrightness = 0.5;
   double _panStartVolume = 1.0;
   double _panStartBrightness = 0.5;
+  double _dragStartY = 0;
   bool _isRightSide = false;
+  bool _verticalDragActive = false;
+  static const double _dragDeadZone = 10.0;
   double _seekStartX = 0;
   Duration _seekGesturePosition = Duration.zero;
   bool _isSeeking = false;
@@ -60,12 +64,25 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     _initVideo();
     _startControlsTimer();
     _checkSavedState();
+    _initBrightness();
   }
 
   Future<void> _checkSavedState() async {
     final service = ref.read(downloadServiceProvider);
     final saved = await service.isAlreadySaved(widget.video.path);
     if (mounted) setState(() => _isSaved = saved);
+  }
+
+  Future<void> _initBrightness() async {
+    try {
+      final brightness = await ScreenBrightness().application;
+      if (mounted) {
+        ref.read(videoBrightnessProvider.notifier).state = brightness;
+        _dragBrightness = brightness;
+      }
+    } catch (_) {
+      // Fallback: use default 0.5
+    }
   }
 
   Future<void> _setImmersive() async {
@@ -122,6 +139,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     WidgetsBinding.instance.removeObserver(this);
     WakelockPlus.disable();
     _controlsTimer?.cancel();
+    // Restore system brightness
+    ScreenBrightness().resetApplicationScreenBrightness();
     SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();
@@ -263,16 +282,28 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       onDoubleTap: () {}, // Required for onDoubleTapDown to fire
       onVerticalDragStart: (details) {
         _isRightSide = details.localPosition.dx > screenWidth / 2;
+        _dragStartY = details.localPosition.dy;
         _panStartVolume = ref.read(videoVolumeProvider);
         _panStartBrightness = ref.read(videoBrightnessProvider);
         _dragVolume = _panStartVolume;
         _dragBrightness = _panStartBrightness;
+        _verticalDragActive = false;
       },
       onVerticalDragUpdate: (details) {
-        final delta = -details.delta.dy / screenHeight;
+        final totalDeltaY = _dragStartY - details.localPosition.dy;
+
+        // Dead zone: require minimum movement before activating
+        if (!_verticalDragActive) {
+          if (totalDeltaY.abs() < _dragDeadZone) return;
+          _verticalDragActive = true;
+        }
+
+        // Cumulative delta normalized to screen height
+        final normalizedDelta = totalDeltaY / (screenHeight * 0.7);
+
         if (_isRightSide) {
           // Volume control
-          _dragVolume = (_panStartVolume + delta * 2).clamp(0.0, 1.0);
+          _dragVolume = (_panStartVolume + normalizedDelta).clamp(0.0, 1.0);
           ref.read(videoPlayerProvider.notifier).setVolume(_dragVolume);
           setState(() {
             _showVolumeOverlay = true;
@@ -280,8 +311,10 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
           });
         } else {
           // Brightness control
-          _dragBrightness = (_panStartBrightness + delta * 2).clamp(0.0, 1.0);
+          _dragBrightness = (_panStartBrightness + normalizedDelta).clamp(0.0, 1.0);
           ref.read(videoBrightnessProvider.notifier).state = _dragBrightness;
+          // Apply actual screen brightness
+          ScreenBrightness().setApplicationScreenBrightness(_dragBrightness);
           setState(() {
             _showBrightnessOverlay = true;
             _showVolumeOverlay = false;
@@ -289,7 +322,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
         }
       },
       onVerticalDragEnd: (_) {
-        Future.delayed(const Duration(seconds: 1), () {
+        _verticalDragActive = false;
+        Future.delayed(const Duration(milliseconds: 800), () {
           if (mounted) {
             setState(() {
               _showVolumeOverlay = false;

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
@@ -14,11 +15,24 @@ final audioPlayerServiceProvider = Provider<AudioPlayerService>((ref) {
 });
 
 class AudioPlayerService {
-  final AudioPlayer _player = AudioPlayer();
+  late final AndroidEqualizer _equalizer;
+  late final AudioPlayer _player;
   final _logger = Logger();
 
   List<AudioModel> _queue = [];
   int _currentIndex = 0;
+
+  AudioPlayerService() {
+    _equalizer = AndroidEqualizer();
+    _player = AudioPlayer(
+      audioPipeline: AudioPipeline(
+        androidAudioEffects: [_equalizer],
+      ),
+    );
+  }
+
+  // Equalizer access
+  AndroidEqualizer get equalizer => _equalizer;
 
   // Streams
   Stream<PlayerState> get playerStateStream => _player.playerStateStream;
@@ -138,6 +152,49 @@ class AudioPlayerService {
   Future<void> skipToIndex(int index) async {
     await _player.seek(Duration.zero, index: index);
     await _player.play();
+  }
+
+  // ── Equalizer Methods ──────────────────────────────────────────────────────
+
+  Future<void> setEqualizerEnabled(bool enabled) async {
+    await _equalizer.setEnabled(enabled);
+  }
+
+  Future<AndroidEqualizerParameters> getEqualizerParameters() async {
+    return await _equalizer.parameters;
+  }
+
+  Future<void> setEqualizerBandGain(int bandIndex, double gain) async {
+    final params = await _equalizer.parameters;
+    if (bandIndex >= 0 && bandIndex < params.bands.length) {
+      params.bands[bandIndex].setGain(gain);
+    }
+  }
+
+  /// Predefined equalizer presets: name → list of gain values (in dB)
+  static const Map<String, List<double>> equalizerPresets = {
+    'Flat':       [0.0, 0.0, 0.0, 0.0, 0.0],
+    'Bass Boost': [5.0, 3.5, 0.0, 0.0, 0.0],
+    'Treble':     [0.0, 0.0, 0.0, 3.5, 5.0],
+    'Rock':       [4.0, 2.0, -1.0, 3.0, 4.5],
+    'Pop':        [-1.0, 2.0, 4.0, 2.0, -1.0],
+    'Jazz':       [3.0, 1.0, -1.0, 1.5, 3.5],
+    'Classical':  [3.5, 2.0, 0.0, 2.0, 3.5],
+    'Electronic': [4.5, 2.5, 0.0, 1.0, 4.0],
+    'Vocal':      [-2.0, 0.0, 4.0, 3.0, 0.0],
+  };
+
+  Future<void> applyPreset(String presetName) async {
+    final gains = equalizerPresets[presetName];
+    if (gains == null) return;
+    final params = await _equalizer.parameters;
+    for (int i = 0; i < gains.length && i < params.bands.length; i++) {
+      final clampedGain = gains[i].clamp(
+        params.minDecibels.toDouble(),
+        params.maxDecibels.toDouble(),
+      );
+      params.bands[i].setGain(clampedGain);
+    }
   }
 
   void dispose() {
