@@ -7,6 +7,7 @@ import 'package:on_audio_query/on_audio_query.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../data/models/audio_model.dart';
 import '../../../../data/services/audio_player_service.dart';
+import '../../../../data/services/download_service.dart';
 import '../../../../shared/widgets/common_widgets.dart';
 import '../../providers/audio_player_provider.dart';
 import '../../providers/audio_library_provider.dart';
@@ -537,6 +538,7 @@ class _AudioPlayerScreenState extends ConsumerState<AudioPlayerScreen>
   }
 
   void _showOptions(BuildContext context) {
+    final track = ref.read(currentTrackProvider);
     showModalBottomSheet(
       context: context,
       builder: (ctx) => Padding(
@@ -544,6 +546,43 @@ class _AudioPlayerScreenState extends ConsumerState<AudioPlayerScreen>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            ListTile(
+              leading: const Icon(Icons.save_alt_rounded),
+              title: const Text('Save to Downloads'),
+              onTap: () async {
+                Navigator.pop(ctx);
+                if (track == null) return;
+                final service = ref.read(downloadServiceProvider);
+                final alreadySaved =
+                    await service.isAlreadySaved(track.path);
+                if (alreadySaved) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Already saved to Downloads'),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  }
+                  return;
+                }
+                final destPath = await service.saveLocalFile(
+                  sourcePath: track.path,
+                );
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        destPath != null
+                            ? 'Saved to Downloads'
+                            : 'Failed to save file',
+                      ),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                }
+              },
+            ),
             ListTile(
               leading: const Icon(Icons.share_rounded),
               title: const Text('Share'),

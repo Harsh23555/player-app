@@ -10,6 +10,7 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/media_utils.dart';
 import '../../../../data/models/video_model.dart';
 import '../../../../data/repositories/recently_played_repository.dart';
+import '../../../../data/services/download_service.dart';
 import '../../providers/video_player_provider.dart';
 
 class VideoPlayerScreen extends ConsumerStatefulWidget {
@@ -43,6 +44,10 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   bool _showSpeedPanel = false;
   final List<double> _speeds = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
 
+  // Save to downloads state
+  bool _isSaving = false;
+  bool _isSaved = false;
+
   /// PiP method channel
   static const _pipChannel = MethodChannel('com.novaplayer.app/pip');
 
@@ -54,6 +59,13 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     _setImmersive();
     _initVideo();
     _startControlsTimer();
+    _checkSavedState();
+  }
+
+  Future<void> _checkSavedState() async {
+    final service = ref.read(downloadServiceProvider);
+    final saved = await service.isAlreadySaved(widget.video.path);
+    if (mounted) setState(() => _isSaved = saved);
   }
 
   Future<void> _setImmersive() async {
@@ -113,6 +125,46 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();
+  }
+
+  Future<void> _saveToDownloads() async {
+    if (_isSaving || _isSaved) return;
+    setState(() => _isSaving = true);
+
+    try {
+      final service = ref.read(downloadServiceProvider);
+      final destPath = await service.saveLocalFile(
+        sourcePath: widget.video.path,
+      );
+
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+          _isSaved = destPath != null;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              destPath != null
+                  ? 'Saved to Downloads'
+                  : 'Failed to save file',
+            ),
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isSaving = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _enterPiP() async {
@@ -469,6 +521,25 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                   icon: const Icon(Icons.picture_in_picture_alt_rounded,
                       color: Colors.white),
                   tooltip: 'Picture in Picture',
+                ),
+                IconButton(
+                  onPressed: _isSaving ? null : _saveToDownloads,
+                  icon: _isSaving
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : Icon(
+                          _isSaved
+                              ? Icons.download_done_rounded
+                              : Icons.save_alt_rounded,
+                          color: _isSaved ? Colors.greenAccent : Colors.white,
+                        ),
+                  tooltip: _isSaved ? 'Already Saved' : 'Save to Downloads',
                 ),
                 IconButton(
                   onPressed: () {

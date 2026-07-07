@@ -150,6 +150,49 @@ class DownloadService {
     return _repository.getAll();
   }
 
+  /// Copies a local file to the Downloads directory.
+  /// Returns the destination path on success, null on failure.
+  Future<String?> saveLocalFile({
+    required String sourcePath,
+    String? customFileName,
+  }) async {
+    try {
+      final sourceFile = File(sourcePath);
+      if (!await sourceFile.exists()) {
+        AppLogger.error('saveLocalFile: source does not exist: $sourcePath');
+        return null;
+      }
+
+      final destDir = await downloadDirectory;
+      final originalName = customFileName ?? p.basename(sourcePath);
+      var destPath = p.join(destDir, originalName);
+
+      // Handle duplicate file names
+      if (File(destPath).existsSync()) {
+        final nameWithoutExt = p.basenameWithoutExtension(originalName);
+        final ext = p.extension(originalName);
+        int counter = 1;
+        while (File(destPath).existsSync()) {
+          destPath = p.join(destDir, '$nameWithoutExt ($counter)$ext');
+          counter++;
+        }
+      }
+
+      await sourceFile.copy(destPath);
+      return destPath;
+    } catch (e, st) {
+      AppLogger.error('saveLocalFile failed', error: e, stackTrace: st);
+      return null;
+    }
+  }
+
+  /// Checks if a file with the same name already exists in Downloads.
+  Future<bool> isAlreadySaved(String sourcePath) async {
+    final destDir = await downloadDirectory;
+    final name = p.basename(sourcePath);
+    return File(p.join(destDir, name)).existsSync();
+  }
+
   Future<void> updateProgress({
     required String taskId,
     required int status,
