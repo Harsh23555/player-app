@@ -1,121 +1,690 @@
-# Project Issues
+# Nova Player - Download Manager & Media Player
+# Master Feature Implementation Issues
 
-> These issues are written to be standalone — each one can be handed to an AI coding assistant (e.g. Claude Code) on its own, without needing extra context from this file or from a conversation. Update the "Context / Files" section in each issue with real paths once you point the AI tool at your repo.
-
----
-
-## Issue #1: Add Download Feature
-
-### Summary
-Users need a way to download media (video/audio) from within the app for offline access. Currently there is no download functionality anywhere in the UI or backend.
-
-### Problem
-There is no button, menu option, or backend endpoint that lets a user save a file/media item to their device or local storage.
-
-### Requirements
-- [ ] Add a "Download" button/icon in the player UI (and/or list/detail view) for each media item.
-- [ ] On tap/click, fetch the media file and save it to the device's local storage / downloads folder (respect platform conventions — browser download, mobile file system, or desktop file save dialog depending on the stack).
-- [ ] Show download progress (progress bar or percentage) while the file is downloading.
-- [ ] Handle and surface errors (no network, insufficient storage, server error) with a user-facing message.
-- [ ] Prevent duplicate/parallel downloads of the same file; if already downloading, show progress instead of starting again.
-- [ ] If the item is already downloaded, change the button state to "Downloaded" / show a delete-download option.
-- [ ] Respect file naming (avoid overwriting unrelated files) and store metadata (title, size, date downloaded) if the app has a local database.
-
-### Acceptance Criteria
-- Tapping "Download" on any media item downloads the correct file with no corruption.
-- Progress indicator updates smoothly and completes at 100% when done.
-- Downloaded items are accessible/playable offline (if the app supports offline playback) or accessible in the OS's download location.
-- Errors are caught and shown to the user, not silently swallowed or crashing the app.
-
-### Context / Files
-- Identify the media player component (e.g. `Player.*`, `VideoScreen.*`) and the network/API layer used to fetch media.
-- Identify if the app already has permission handling for storage (mobile) — add if missing.
-
-### Suggested Priority
-High
+> Goal:
+Transform Nova Player into a modern download manager comparable to IDM, ADM, 1DM, Seal, NewPipe, and advanced media players.
 
 ---
 
-## Issue #2: Side Swipe Gesture for Brightness (Left) and Volume (Right) Not Working Correctly
+# Issue 001 — Core Download Engine
 
-### Summary
-The player is supposed to support the common video-player gesture pattern: swiping vertically on the **left side** of the screen adjusts **screen brightness**, and swiping vertically on the **right side** of the screen adjusts **volume**. This gesture control is either missing, broken, or behaving inconsistently.
+## Objective
 
-### Problem
-Swipe gestures on the left/right halves of the video screen do not reliably increase or decrease brightness/volume. Possible symptoms to verify and fix:
-- Swipe up/down does nothing.
-- Swipe works but direction is inverted (up decreases instead of increases, or vice versa).
-- Swipe works only on one side, not both.
-- No visual feedback (no on-screen brightness/volume indicator/slider shown during swipe).
-- Gesture conflicts with other controls (e.g. seek bar, tap-to-pause) causing jitter or misfires.
+Build a production-grade download engine.
 
-### Requirements
-- [ ] Detect vertical swipe/pan gestures separately on the left half and right half of the video surface.
-- [ ] Left-side swipe up → increase screen brightness; swipe down → decrease screen brightness.
-- [ ] Right-side swipe up → increase volume; swipe down → decrease volume.
-- [ ] Show a temporary on-screen overlay/indicator (icon + level bar or percentage) while swiping, which fades out after a short delay (e.g. 800ms–1s) once the gesture ends.
-- [ ] Clamp brightness/volume between 0% and 100% (or the platform's min/max).
-- [ ] Make the swipe sensitivity reasonable — full swipe from top to bottom of the screen should roughly go from 100% to 0% (or a configurable sensitivity constant).
-- [ ] Ensure the gesture doesn't interfere with existing tap-to-play/pause, double-tap-to-seek, or horizontal-swipe-to-seek gestures.
-- [ ] Persist volume changes through the normal system/app volume state (so it stays in sync with hardware volume buttons if applicable).
-- [ ] Brightness changes should only affect the app/screen brightness while the player is open (not permanently override system brightness), unless the app is explicitly designed to change system brightness permanently.
+## Features
 
-### Acceptance Criteria
-- Swiping up/down on the left side smoothly and predictably changes brightness with visible feedback.
-- Swiping up/down on the right side smoothly and predictably changes volume with visible feedback.
-- No conflicts with other player gestures (seeking, play/pause, double-tap).
-- Works consistently across repeated gestures (no drift, no getting "stuck").
+- Download any file from URL
+- HTTP
+- HTTPS
+- FTP (optional)
+- HEAD request validation
+- Content-Length detection
+- MIME detection
+- File naming
+- Resume support
+- Partial download support
+- HTTP Range Requests
+- Temporary file handling
+- Metadata storage
 
-### Context / Files
-- Identify the gesture handler currently attached to the video view (e.g. `PanResponder`, `GestureDetector`, touch event listeners, or platform-specific gesture recognizers).
-- Identify existing brightness/volume control APIs already used in the codebase, if any.
+## Acceptance Criteria
 
-### Suggested Priority
-Medium-High
+- Any downloadable URL works.
+- Download survives app lifecycle.
+- Proper error handling.
+- Download status updates correctly.
 
 ---
 
-## Issue #3: Video Equalizer Not Working Properly
+# Issue 002 — Pause / Resume Engine
 
-### Summary
-The video/audio equalizer feature is present in the app but is not functioning correctly — it does not properly alter the audio output when adjusted.
+## Implement
 
-### Problem
-Symptoms to investigate and confirm (test each explicitly, since the exact failure mode isn't clear yet):
-- Equalizer sliders/presets have no audible effect on playback.
-- Equalizer settings reset when the video is paused/resumed or when switching media.
-- Equalizer applies incorrectly (e.g. wrong frequency bands affected, distortion/clipping introduced, or gain applied inconsistently).
-- Equalizer UI and actual audio pipeline are out of sync (UI shows a value, but the underlying audio filter isn't updated).
-- Crash or audio glitch (pop, stutter, mute) when adjusting bands in real time.
+- Pause
+- Resume
+- Cancel
+- Retry
+- Resume after crash
+- Resume after restart
+- Resume after reboot
+- Resume after internet reconnect
 
-### Requirements
-- [ ] Reproduce the current bug(s) and document exact steps + observed vs expected behavior before fixing.
-- [ ] Verify the audio pipeline/engine used (e.g. ExoPlayer, AVAudioEngine, ffmpeg-based filter, Web Audio API `BiquadFilterNode`, etc.) and confirm equalizer nodes/filters are actually inserted into the active audio graph — not just being visually presented.
-- [ ] Ensure each band's gain/frequency/Q value updates the audio graph in real time without needing to restart playback.
-- [ ] Ensure equalizer settings persist correctly per session (and optionally per-user preference) across pause/resume/track change, unless intentionally reset.
-- [ ] Fix any distortion/clipping by ensuring gain values are properly clamped and normalized.
-- [ ] Sync UI state with actual applied audio parameters (single source of truth — don't let UI state and audio engine state diverge).
-- [ ] Verify presets (if any, e.g. "Bass Boost", "Treble", "Flat") apply the correct band values.
-- [ ] Add basic tests or a manual QA checklist confirming audible difference is heard for typical use (bass boost noticeably increases low frequencies, etc.).
+## Acceptance
 
-### Acceptance Criteria
-- Moving any equalizer band produces an audible, correct change in the audio output in real time.
-- Settings don't unexpectedly reset or desync from the UI.
-- No crashes, pops, or glitches when adjusting the equalizer during playback.
-- Presets apply the expected frequency/gain configuration.
-
-### Context / Files
-- Identify the equalizer component/UI and the underlying audio engine/library it's supposed to control.
-- Check whether the equalizer nodes are actually attached to the playback audio session, or only to a decoupled/test audio graph.
-
-### Suggested Priority
-High (existing broken feature affecting current users)
+- Download continues from previous byte.
+- No restart from zero.
 
 ---
 
-## How to Use These Issues With an AI Coding Tool
+# Issue 003 — Multi-thread Download Engine
 
-1. Open your project in Claude Code (or a similar AI coding tool).
-2. Paste one issue at a time (they're self-contained) along with: "Here's the issue, here's my repo — find the relevant files and implement this."
-3. Ask the AI tool to first locate the relevant files/components (player, gesture handlers, audio engine, download manager) before writing code, since the exact file paths depend on your project structure.
-4. Review each fix/feature against the Acceptance Criteria listed above before merging.
+## Implement
+
+Dynamic segmented downloading.
+
+### Features
+
+- 1–32 threads
+- Auto thread calculation
+- Manual thread selection
+- Merge downloaded parts
+- Thread health monitoring
+- Retry failed thread
+- Thread balancing
+
+### Acceptance
+
+- Large files download significantly faster.
+- Threads merge correctly.
+
+---
+
+# Issue 004 — Download Queue Manager
+
+Implement
+
+- Queue
+- Priority queue
+- FIFO
+- Pause queue
+- Resume queue
+- Queue ordering
+- Auto next download
+- Concurrent downloads
+
+Settings
+
+- 1
+- 2
+- 4
+- 8
+- Unlimited simultaneous downloads
+
+---
+
+# Issue 005 — Download Speed Optimization
+
+Implement
+
+- Download acceleration
+- Dynamic connection scaling
+- Speed limiter
+- Unlimited mode
+- Bandwidth control
+- ETA prediction
+- Speed graph
+- Average speed
+- Peak speed
+- Timeout recovery
+
+---
+
+# Issue 006 — File Integrity
+
+Implement
+
+- MD5
+- SHA1
+- SHA256
+- CRC32
+- File corruption detection
+- Auto re-download damaged segments
+
+Acceptance
+
+- Corrupted download automatically repaired.
+
+---
+
+# Issue 007 — Smart Duplicate Detection
+
+Implement
+
+- Duplicate filename detection
+- Duplicate checksum detection
+- Smart rename
+- Replace existing
+- Skip existing
+- Keep both
+
+---
+
+# Issue 008 — Download History
+
+Implement
+
+- Recent Downloads
+- Download History
+- Search
+- Filter
+- Delete history
+- Export history
+- Import history
+
+---
+
+# Issue 009 — Folder Selection
+
+Implement
+
+- SAF support
+- Custom folders
+- External SD
+- USB OTG
+- Remember folders
+- Default folders
+
+---
+
+# Issue 010 — Background Download Service
+
+Implement
+
+Foreground service.
+
+Features
+
+- Notification
+- Persistent service
+- Battery optimization handling
+- Wake Lock
+- Foreground notification
+
+Acceptance
+
+Downloads continue after app minimized.
+
+---
+
+# Issue 011 — Download Notifications
+
+Implement
+
+- Progress
+- Speed
+- ETA
+- Pause
+- Resume
+- Cancel
+- Complete
+- Failed
+- Retry
+
+Android notification actions required.
+
+---
+
+# Issue 012 — Scheduler
+
+Implement
+
+- Download later
+- Scheduled time
+- Night mode
+- Charging only
+- WiFi only
+- Battery threshold
+- Auto pause
+- Auto resume
+
+---
+
+# Issue 013 — Network Manager
+
+Implement
+
+- WiFi only
+- Mobile data
+- Roaming protection
+- VPN compatibility
+- Proxy
+- HTTP Proxy
+- HTTPS Proxy
+- SOCKS5
+- Custom DNS
+- Connection timeout
+- Retry policy
+
+---
+
+# Issue 014 — Clipboard Detection
+
+Implement
+
+Clipboard monitoring.
+
+Features
+
+- Detect copied URL
+- Download popup
+- Ignore duplicates
+- Auto detect supported links
+
+---
+
+# Issue 015 — Share To Download
+
+Implement Android Share Intent.
+
+Apps
+
+- Chrome
+- Firefox
+- Edge
+- Instagram
+- Facebook
+- X
+- Reddit
+- TikTok
+- YouTube
+- Files
+
+---
+
+# Issue 016 — QR Code Download
+
+Implement
+
+- QR Scanner
+- URL extraction
+- Validation
+- Start download
+
+---
+
+# Issue 017 — Browser Integration
+
+Implement
+
+- Built-in browser
+- Tabs
+- History
+- Bookmarks
+- Cookies
+- Incognito
+- Ad blocker
+- Popup blocker
+- Download interception
+- Video detector
+
+---
+
+# Issue 018 — Smart Link Scanner
+
+Implement webpage parser.
+
+Detect
+
+- Images
+- Videos
+- PDFs
+- ZIP
+- Audio
+- APK
+- Documents
+
+---
+
+# Issue 019 — Supported File Types
+
+Support
+
+- Video
+- Audio
+- Images
+- Documents
+- APK
+- ZIP
+- RAR
+- 7Z
+- ISO
+- EXE
+- Torrent
+- Magnet
+- M3U8
+- DASH
+- TS
+- Subtitle
+
+---
+
+# Issue 020 — Video Downloader Engine
+
+Implement
+
+Video extraction.
+
+Support
+
+- MP4
+- WebM
+- MKV
+- MOV
+- AVI
+- FLV
+- 3GP
+
+Auto detect embedded videos.
+
+---
+
+# Issue 021 — Adaptive Streaming
+
+Implement
+
+- HLS
+- DASH
+- M3U8
+- MPD
+- Live replay
+- Segment merging
+
+---
+
+# Issue 022 — Video Quality Selection
+
+Support
+
+- Auto
+- Audio
+- 144p
+- 240p
+- 360p
+- 480p
+- 720p
+- 1080p
+- 1440p
+- 2K
+- 4K
+- 8K
+- HDR
+- 60FPS
+
+Codec selection
+
+- AVC
+- HEVC
+- AV1
+
+---
+
+# Issue 023 — Audio Downloader
+
+Support
+
+- MP3
+- AAC
+- FLAC
+- WAV
+- OGG
+- M4A
+- OPUS
+
+Features
+
+- Audio extraction
+- Album artwork
+- Lyrics
+- Metadata
+
+---
+
+# Issue 024 — Playlist Downloader
+
+Implement
+
+- Playlist
+- Channel
+- Podcast
+- Season
+- Series
+- Batch selection
+
+---
+
+# Issue 025 — Download Dashboard
+
+Create tabs
+
+- Active
+- Queue
+- Paused
+- Completed
+- Failed
+- Scheduled
+
+Support
+
+Search
+
+Sort
+
+Filter
+
+Grid
+
+List
+
+---
+
+# Issue 026 — File Manager
+
+Implement
+
+- Move
+- Copy
+- Rename
+- Delete
+- Share
+- Compress
+- Extract ZIP
+- Extract RAR
+- Preview
+- Open With
+
+---
+
+# Issue 027 — Storage Analyzer
+
+Implement
+
+Dashboard
+
+- Total storage
+- Used
+- Free
+- Downloads
+- Large files
+- Duplicate files
+
+Charts
+
+- Pie chart
+- Usage graph
+
+---
+
+# Issue 028 — Automation Rules
+
+Implement
+
+- Auto categorize
+- Auto rename
+- Smart folders
+- Smart retry
+- Duplicate rules
+- Cache cleanup
+- Temp cleanup
+
+---
+
+# Issue 029 — Analytics Dashboard
+
+Charts
+
+- Download Speed
+- Daily Downloads
+- Weekly Downloads
+- Monthly Downloads
+- Success Rate
+- Failure Rate
+- Total Files
+- Storage Used
+- Download Time
+- Average Speed
+
+---
+
+# Issue 030 — Video Equalizer (Fix)
+
+Current Problem
+
+Equalizer presets do not affect playback.
+
+Implement
+
+- Android Equalizer API
+- Bass Boost
+- Virtualizer
+- Loudness Enhancer
+
+Presets
+
+- Normal
+- Classical
+- Dance
+- Flat
+- Folk
+- Heavy Metal
+- Hip Hop
+- Jazz
+- Pop
+- Rock
+- Bass Boost
+- Vocal
+- Treble
+
+Manual Controls
+
+- 5-band EQ
+- 10-band EQ (if supported)
+- Save preset
+- Delete preset
+
+Acceptance
+
+Audio changes immediately during playback.
+
+---
+
+# Issue 031 — Full Screen Video
+
+Implement
+
+- Fullscreen button
+- Gesture controls
+- Double tap seek
+- Pinch zoom
+- Lock orientation
+- Auto hide controls
+- Brightness gesture
+- Volume gesture
+- Playback speed
+- Subtitle controls
+- Picture in Picture
+- Keep screen on
+
+Acceptance
+
+Video playback similar to VLC, MX Player, and YouTube.
+
+---
+
+
+
+---
+
+# Issue 033 — Settings Screen
+
+Implement
+
+Download
+
+Network
+
+Notifications
+
+Storage
+
+Video
+
+Audio
+
+Equalizer
+
+Automation
+
+Appearance
+
+Developer Options
+
+---
+
+# Issue 034 — Architecture Refactor
+
+Refactor project.
+
+Layers
+
+Presentation
+
+Application
+
+Domain
+
+Data
+
+Repository
+
+Service
+
+Worker
+
+Database
+
+Models
+
+Utilities
+
+Use
+
+- Riverpod
+- Clean Architecture
+- SOLID
+- Repository Pattern
+- Dependency Injection
+- Background Workers
+- Offline-first design
+
+---
+
+# Final Acceptance Criteria
+
+The application should function as a professional download manager with capabilities comparable to leading download managers while remaining stable, modular, testable, and maintainable.
+
+Core goals include:
+
+- Reliable resumable downloads
+- High-speed multi-thread downloading
+- Smart scheduling and automation
+- Advanced media downloading
+- Robust file management
+- Working audio equalizer
+- Full-screen video experience
+- Clean Architecture
+- Material 3 UI
+- Android 11–15 compatibility
+- Production-ready error handling
+- Comprehensive logging and analytics
+- Unit, integration, and widget test coverage

@@ -255,9 +255,13 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     }
 
     return Center(
-      child: AspectRatio(
-        aspectRatio: playerState.aspectRatio,
-        child: VideoPlayer(playerState.controller!),
+      child: InteractiveViewer(
+        minScale: 0.5,
+        maxScale: 4.0,
+        child: AspectRatio(
+          aspectRatio: playerState.aspectRatio,
+          child: VideoPlayer(playerState.controller!),
+        ),
       ),
     );
   }
@@ -555,25 +559,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                       color: Colors.white),
                   tooltip: 'Picture in Picture',
                 ),
-                IconButton(
-                  onPressed: _isSaving ? null : _saveToDownloads,
-                  icon: _isSaving
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : Icon(
-                          _isSaved
-                              ? Icons.download_done_rounded
-                              : Icons.save_alt_rounded,
-                          color: _isSaved ? Colors.greenAccent : Colors.white,
-                        ),
-                  tooltip: _isSaved ? 'Already Saved' : 'Save to Downloads',
-                ),
+
                 IconButton(
                   onPressed: () {
                     final locked = ref.read(videoControlsLockedProvider);
@@ -708,6 +694,17 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                       icon: const Icon(Icons.forward_10_rounded,
                           color: Colors.white, size: 22),
                     ),
+                    // Subtitles
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('No subtitles available')),
+                        );
+                      },
+                      icon: const Icon(Icons.subtitles_rounded,
+                          color: Colors.white, size: 20),
+                    ),
                     // Info / resolution
                     Padding(
                       padding: const EdgeInsets.only(left: 4),
@@ -726,6 +723,25 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                               fontWeight: FontWeight.w600),
                         ),
                       ),
+                    ),
+                    // Fullscreen
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () {
+                         final isPortrait = MediaQuery.of(context).orientation == Orientation.portrait;
+                         if (isPortrait) {
+                           SystemChrome.setPreferredOrientations([
+                             DeviceOrientation.landscapeLeft,
+                             DeviceOrientation.landscapeRight,
+                           ]);
+                         } else {
+                           SystemChrome.setPreferredOrientations([
+                             DeviceOrientation.portraitUp,
+                           ]);
+                         }
+                      },
+                      icon: const Icon(Icons.fullscreen_rounded,
+                          color: Colors.white, size: 22),
                     ),
                   ],
                 ),

@@ -26,17 +26,21 @@ class DownloadRepository {
     }
   }
 
-  Future<DownloadModel?> getByTaskId(String taskId) async {
+  Future<DownloadEntity?> getByTaskId(String taskId) async {
     try {
-      final entity = await _isar.downloadEntitys
+      return await _isar.downloadEntitys
           .where()
           .taskIdEqualTo(taskId)
           .findFirst();
-      return entity != null ? _toModel(entity) : null;
     } catch (e, st) {
       AppLogger.error('DownloadRepository.getByTaskId failed', error: e, stackTrace: st);
       return null;
     }
+  }
+
+  Future<DownloadModel?> getModelByTaskId(String taskId) async {
+    final entity = await getByTaskId(taskId);
+    return entity != null ? _toModel(entity) : null;
   }
 
   Future<void> insert(DownloadEntity entity) async {
@@ -66,13 +70,15 @@ class DownloadRepository {
         if (entity != null) {
           entity.status = status;
           entity.progress = progress;
-          entity.totalBytes = totalBytes;
-          entity.downloadedBytes = downloadedBytes;
+          if (totalBytes > 0) entity.totalBytes = totalBytes;
+          if (downloadedBytes > 0) entity.downloadedBytes = downloadedBytes;
           entity.speed = speed;
-          if (speed > 0 && totalBytes > downloadedBytes) {
-            entity.eta = ((totalBytes - downloadedBytes) / speed).toInt();
+          if (speed > 0 && entity.totalBytes > entity.downloadedBytes) {
+            entity.eta = ((entity.totalBytes - entity.downloadedBytes) / speed).toInt();
           }
-          if (status == 2) entity.completedAt = DateTime.now();
+          if (status == DownloadStatus.complete.index) {
+            entity.completedAt = DateTime.now();
+          }
           await _isar.downloadEntitys.put(entity);
         }
       });
@@ -108,11 +114,31 @@ class DownloadRepository {
             .findFirst();
         if (entity != null) {
           entity.status = status;
+          if (status == DownloadStatus.complete.index) {
+            entity.completedAt = DateTime.now();
+          }
           await _isar.downloadEntitys.put(entity);
         }
       });
     } catch (e, st) {
       AppLogger.error('DownloadRepository.updateStatus failed', error: e, stackTrace: st);
+    }
+  }
+
+  Future<void> updateResumeMetadata(String taskId, String metadata) async {
+    try {
+      await _isar.writeTxn(() async {
+        final entity = await _isar.downloadEntitys
+            .where()
+            .taskIdEqualTo(taskId)
+            .findFirst();
+        if (entity != null) {
+          entity.resumeMetadata = metadata;
+          await _isar.downloadEntitys.put(entity);
+        }
+      });
+    } catch (e, st) {
+      AppLogger.error('DownloadRepository.updateResumeMetadata failed', error: e, stackTrace: st);
     }
   }
 
@@ -129,16 +155,46 @@ class DownloadRepository {
     }
   }
 
-  Future<List<DownloadModel>> getCompleted() async {
+  Future<List<DownloadModel>> getByStatus(DownloadStatus status) async {
     try {
       final all = await _isar.downloadEntitys.where().findAll();
+      return all.where((e) => e.status == status.index).map(_toModel).toList();
+    } catch (e, st) {
+      AppLogger.error('DownloadRepository.getByStatus failed', error: e, stackTrace: st);
+      return [];
+    }
+  }
+
+  Future<List<DownloadModel>> getCompleted() async {
+    return getByStatus(DownloadStatus.complete);
+  }
+
+  Future<List<DownloadModel>> searchDownloads(String query) async {
+    try {
+      final all = await _isar.downloadEntitys.where().findAll();
+      final q = query.toLowerCase();
       return all
-          .where((e) => e.status == 2)
+          .where((e) =>
+              e.fileName.toLowerCase().contains(q) ||
+              e.url.toLowerCase().contains(q))
           .map(_toModel)
           .toList();
-    } catch (e, st) {
-      AppLogger.error('DownloadRepository.getCompleted failed', error: e, stackTrace: st);
+    } catch (e) {
       return [];
+    }
+  }
+
+  Future<void> clearHistory() async {
+    try {
+      await _isar.writeTxn(() async {
+        await _isar.downloadEntitys
+            .where()
+            .filter()
+            .statusEqualTo(DownloadStatus.complete.index)
+            .deleteAll();
+      });
+    } catch (e) {
+      AppLogger.error('clearHistory failed', error: e);
     }
   }
 
@@ -149,7 +205,7 @@ class DownloadRepository {
       url: e.url,
       fileName: e.fileName,
       savePath: e.savePath,
-      status: DownloadStatus.values[e.status.clamp(0, 5)],
+      status: DownloadStatus.values[e.status.clamp(0, DownloadStatus.values.length - 1)],
       progress: e.progress,
       totalBytes: e.totalBytes,
       downloadedBytes: e.downloadedBytes,
@@ -157,8 +213,11 @@ class DownloadRepository {
       eta: e.eta,
       thumbnailUrl: e.thumbnailUrl,
       errorMessage: e.errorMessage,
+      mimeType: e.mimeType,
       createdAt: e.createdAt,
       completedAt: e.completedAt,
+      threadCount: e.threadCount,
+      priority: e.priority,
     );
   }
 }

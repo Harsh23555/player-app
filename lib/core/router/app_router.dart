@@ -11,6 +11,11 @@ import '../../features/downloads/presentation/screens/download_manager_screen.da
 import '../../features/settings/presentation/screens/settings_screen.dart';
 import '../../data/models/audio_model.dart';
 import '../../data/models/video_model.dart';
+import '../../features/settings/presentation/screens/equalizer_screen.dart';
+import '../../features/settings/presentation/screens/network_manager_screen.dart';
+import '../../features/settings/presentation/screens/automation_rules_screen.dart';
+import '../../features/downloads/presentation/screens/storage_analyzer_screen.dart';
+import '../../features/downloads/presentation/screens/file_manager_screen.dart';
 
 
 final appRouterProvider = Provider<GoRouter>((ref) {
@@ -80,6 +85,46 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           state: state,
         ),
       ),
+      GoRoute(
+        path: AppRoutes.equalizer,
+        name: 'equalizer',
+        pageBuilder: (context, state) => _buildPage(
+          child: const EqualizerScreen(),
+          state: state,
+        ),
+      ),
+      GoRoute(
+        path: AppRoutes.network,
+        name: 'network',
+        pageBuilder: (context, state) => _buildPage(
+          child: const NetworkManagerScreen(),
+          state: state,
+        ),
+      ),
+      GoRoute(
+        path: AppRoutes.automation,
+        name: 'automation',
+        pageBuilder: (context, state) => _buildPage(
+          child: const AutomationRulesScreen(),
+          state: state,
+        ),
+      ),
+      GoRoute(
+        path: AppRoutes.storage,
+        name: 'storage',
+        pageBuilder: (context, state) => _buildPage(
+          child: const StorageAnalyzerScreen(),
+          state: state,
+        ),
+      ),
+      GoRoute(
+        path: AppRoutes.fileManager,
+        name: 'fileManager',
+        pageBuilder: (context, state) => _buildPage(
+          child: const FileManagerScreen(),
+          state: state,
+        ),
+      ),
     ],
     errorBuilder: (context, state) => Scaffold(
       body: Center(
@@ -142,4 +187,9 @@ class AppRoutes {
   static const videoPlayer = '/video/player';
   static const downloads = '/downloads';
   static const settings = '/settings';
+  static const equalizer = '/settings/equalizer';
+  static const network = '/settings/network';
+  static const automation = '/settings/automation';
+  static const storage = '/storage';
+  static const fileManager = '/file-manager';
 }

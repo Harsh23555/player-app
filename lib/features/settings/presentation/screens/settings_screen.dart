@@ -65,6 +65,14 @@ class SettingsScreen extends ConsumerWidget {
                         activeColor: AppTheme.primaryViolet,
                       ),
                       _buildDivider(),
+                      ListTile(
+                        leading: const Icon(Icons.equalizer_rounded),
+                        title: const Text('Audio Equalizer'),
+                        subtitle: const Text('Adjust sound frequencies'),
+                        trailing: const Icon(Icons.chevron_right_rounded, color: AppTheme.darkTextSecondary),
+                        onTap: () => context.push(AppRoutes.equalizer),
+                      ),
+                      _buildDivider(),
                       _buildSkipDurationTile(context, settings.skipDuration,
                           (v) => notifier.setSkipDuration(v)),
                       _buildDivider(),
@@ -131,6 +139,14 @@ class SettingsScreen extends ConsumerWidget {
                         secondary: const Icon(Icons.photo_library_rounded),
                         activeColor: AppTheme.primaryViolet,
                       ),
+                      _buildDivider(),
+                      ListTile(
+                        leading: const Icon(Icons.storage_rounded),
+                        title: const Text('Storage Analyzer'),
+                        subtitle: const Text('View storage usage and free up space'),
+                        trailing: const Icon(Icons.chevron_right_rounded, color: AppTheme.darkTextSecondary),
+                        onTap: () => context.push(AppRoutes.storage),
+                      ),
                     ],
                   ),
                 ).animate().fadeIn(duration: 400.ms, delay: 200.ms),
@@ -159,6 +175,32 @@ class SettingsScreen extends ConsumerWidget {
                     ],
                   ),
                 ).animate().fadeIn(duration: 400.ms, delay: 250.ms),
+                const SizedBox(height: 20),
+
+                // ── Network & Automation ──────────────────────────────────
+                _SectionTitle(title: 'Network & Automation'),
+                const SizedBox(height: 12),
+                GlassCard(
+                  child: Column(
+                    children: [
+                      ListTile(
+                        leading: const Icon(Icons.wifi_rounded),
+                        title: const Text('Network Manager'),
+                        subtitle: const Text('Manage proxy, VPN, and retry policies'),
+                        trailing: const Icon(Icons.chevron_right_rounded, color: AppTheme.darkTextSecondary),
+                        onTap: () => context.push(AppRoutes.network),
+                      ),
+                      _buildDivider(),
+                      ListTile(
+                        leading: const Icon(Icons.smart_toy_rounded),
+                        title: const Text('Automation Rules'),
+                        subtitle: const Text('Smart categorization and auto-cleanup'),
+                        trailing: const Icon(Icons.chevron_right_rounded, color: AppTheme.darkTextSecondary),
+                        onTap: () => context.push(AppRoutes.automation),
+                      ),
+                    ],
+                  ),
+                ).animate().fadeIn(duration: 400.ms, delay: 280.ms),
                 const SizedBox(height: 20),
 
                 // ── About ─────────────────────────────────────────────────

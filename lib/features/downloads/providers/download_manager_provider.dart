@@ -1,131 +1,119 @@
-import 'dart:isolate';
-import 'dart:ui';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_downloader/flutter_downloader.dart';
 
 import '../../../data/models/download_model.dart';
-import '../../../data/services/download_service.dart';
+import '../../../data/services/multi_thread_download_service.dart';
+import '../../../data/services/notification_service.dart';
+import '../../../data/services/scheduler_service.dart';
 
-// ── Download Manager State ───────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// State
+// ─────────────────────────────────────────────────────────────────────────────
 class DownloadManagerState {
   final List<DownloadModel> downloads;
   final bool isLoading;
   final String? error;
-  final String urlInput;
-  final bool urlValid;
-  final String? urlError;
-  final bool isValidating;
-  final String? suggestedFileName;
-  final int? suggestedFileSize;
+  final int maxConcurrent;
 
   const DownloadManagerState({
     this.downloads = const [],
     this.isLoading = false,
     this.error,
-    this.urlInput = '',
-    this.urlValid = false,
-    this.urlError,
-    this.isValidating = false,
-    this.suggestedFileName,
-    this.suggestedFileSize,
+    this.maxConcurrent = 3,
   });
 
   DownloadManagerState copyWith({
     List<DownloadModel>? downloads,
     bool? isLoading,
     String? error,
-    String? urlInput,
-    bool? urlValid,
-    String? urlError,
-    bool? isValidating,
-    String? suggestedFileName,
-    int? suggestedFileSize,
+    int? maxConcurrent,
   }) =>
       DownloadManagerState(
         downloads: downloads ?? this.downloads,
         isLoading: isLoading ?? this.isLoading,
         error: error,
-        urlInput: urlInput ?? this.urlInput,
-        urlValid: urlValid ?? this.urlValid,
-        urlError: urlError,
-        isValidating: isValidating ?? this.isValidating,
-        suggestedFileName: suggestedFileName ?? this.suggestedFileName,
-        suggestedFileSize: suggestedFileSize ?? this.suggestedFileSize,
+        maxConcurrent: maxConcurrent ?? this.maxConcurrent,
       );
 
+  // Computed lists
   List<DownloadModel> get active =>
-      downloads.where((d) => d.isActive).toList();
+      downloads.where((d) => d.status == DownloadStatus.running).toList();
+  List<DownloadModel> get queued =>
+      downloads.where((d) => d.status == DownloadStatus.enqueued).toList();
   List<DownloadModel> get paused =>
       downloads.where((d) => d.isPaused).toList();
   List<DownloadModel> get completed =>
       downloads.where((d) => d.isComplete).toList();
   List<DownloadModel> get failed =>
       downloads.where((d) => d.isFailed).toList();
+  List<DownloadModel> get scheduled =>
+      downloads.where((d) => d.isScheduled).toList();
+  List<DownloadModel> get canceled =>
+      downloads.where((d) => d.isCanceled).toList();
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Notifier
+// ─────────────────────────────────────────────────────────────────────────────
 class DownloadManagerNotifier extends StateNotifier<DownloadManagerState> {
-  final DownloadService _service;
-  ReceivePort? _port;
+  final MultiThreadDownloadService _service;
+  final DownloadNotificationService _notifications;
+  final SchedulerService _scheduler;
 
-  DownloadManagerNotifier(this._service) : super(const DownloadManagerState()) {
+  DownloadManagerNotifier(
+    this._service,
+    this._notifications,
+    this._scheduler,
+  ) : super(const DownloadManagerState()) {
     _init();
   }
 
   void _init() {
-    _port = ReceivePort();
-    IsolateNameServer.registerPortWithName(
-        _port!.sendPort, 'downloader_send_port');
-    _port!.listen((dynamic data) {
-      if (data is List) {
-        final taskId = data[0] as String;
-        final status = data[1] as int;
-        final progress = data[2] as int;
-        _onDownloadProgress(taskId, status, progress);
-      }
-    });
+    // Listen to progress updates from the download service
+    _service.onProgress = (taskId, status, progress, speed, eta) {
+      final updated = state.downloads.map((d) {
+        if (d.taskId == taskId) {
+          final updated = d.copyWith(
+            status: status,
+            progress: progress,
+            speed: speed,
+            eta: eta,
+            completedAt: status == DownloadStatus.complete ? DateTime.now() : d.completedAt,
+          );
 
-    FlutterDownloader.registerCallback(downloadCallback, step: 1);
+          // Show notification updates
+          if (status == DownloadStatus.running || status == DownloadStatus.paused) {
+            _notifications.showProgress(
+              taskId: taskId,
+              fileName: d.fileName,
+              progress: (progress * 100).round(),
+              speed: d.formattedSpeed,
+              eta: d.formattedEta,
+              status: status,
+            );
+          } else if (status == DownloadStatus.complete) {
+            _notifications.showComplete(
+              taskId: taskId,
+              fileName: d.fileName,
+              fileSize: d.formattedTotalSize,
+            );
+          } else if (status == DownloadStatus.failed) {
+            _notifications.showFailed(
+              taskId: taskId,
+              fileName: d.fileName,
+              error: d.errorMessage ?? 'Unknown error',
+            );
+          }
+
+          return updated;
+        }
+        return d;
+      }).toList();
+      state = state.copyWith(downloads: updated);
+    };
+
+    _notifications.initialize();
+    _scheduler.initialize();
     loadDownloads();
-  }
-
-  @pragma('vm:entry-point')
-  static void downloadCallback(String id, int status, int progress) {
-    final SendPort? send =
-        IsolateNameServer.lookupPortByName('downloader_send_port');
-    send?.send([id, status, progress]);
-  }
-
-  void _onDownloadProgress(String taskId, int status, int progress) {
-    final updated = state.downloads.map((d) {
-      if (d.taskId == taskId) {
-        return DownloadModel(
-          id: d.id,
-          taskId: d.taskId,
-          url: d.url,
-          fileName: d.fileName,
-          savePath: d.savePath,
-          status: DownloadStatus.values[status.clamp(0, 5)],
-          progress: progress / 100.0,
-          totalBytes: d.totalBytes,
-          downloadedBytes: (d.totalBytes * progress / 100).toInt(),
-          speed: d.speed,
-          eta: d.eta,
-          thumbnailUrl: d.thumbnailUrl,
-          errorMessage: d.errorMessage,
-          createdAt: d.createdAt,
-          completedAt: status == 2 ? DateTime.now() : d.completedAt,
-        );
-      }
-      return d;
-    }).toList();
-    state = state.copyWith(downloads: updated);
-
-    // Persist to DB
-    _service.updateProgress(
-      taskId: taskId,
-      status: status,
-      progress: progress / 100.0,
-    );
   }
 
   Future<void> loadDownloads() async {
@@ -138,36 +126,18 @@ class DownloadManagerNotifier extends StateNotifier<DownloadManagerState> {
     }
   }
 
-  void setUrlInput(String url) {
-    state = state.copyWith(
-      urlInput: url,
-      urlValid: false,
-      urlError: null,
-      suggestedFileName: null,
-      suggestedFileSize: null,
-    );
-  }
-
-  Future<void> validateUrl() async {
-    if (state.urlInput.isEmpty) return;
-    state = state.copyWith(isValidating: true, urlError: null);
-    final result = await _service.validateUrl(state.urlInput);
-    state = state.copyWith(
-      isValidating: false,
-      urlValid: result.valid,
-      urlError: result.error,
-      suggestedFileName: result.fileName,
-      suggestedFileSize: result.fileSize,
-    );
-  }
-
-  Future<bool> startDownload({String? customFileName}) async {
-    if (!state.urlValid) return false;
-
-    final fileName = customFileName ?? state.suggestedFileName ?? 'download.mp4';
+  /// Issue 001-003: Start download with thread configuration
+  Future<bool> startDownloadWithConfig({
+    required String url,
+    required String fileName,
+    int threadCount = 4,
+    int priority = 0,
+  }) async {
     final taskId = await _service.startDownload(
-      url: state.urlInput,
+      url: url,
       fileName: fileName,
+      threadCount: threadCount,
+      priority: priority,
     );
 
     if (taskId == null) {
@@ -176,30 +146,48 @@ class DownloadManagerNotifier extends StateNotifier<DownloadManagerState> {
     }
 
     await loadDownloads();
-    state = state.copyWith(
-      urlInput: '',
-      urlValid: false,
-      suggestedFileName: null,
-      suggestedFileSize: null,
-    );
     return true;
   }
 
+  /// Issue 012: Schedule a download
+  Future<bool> scheduleDownload({
+    required String url,
+    required String fileName,
+    required DateTime scheduledAt,
+    bool wifiOnly = false,
+    bool chargingOnly = false,
+  }) async {
+    final taskId = DateTime.now().millisecondsSinceEpoch.toString();
+    return _scheduler.scheduleDownload(
+      taskId: taskId,
+      url: url,
+      fileName: fileName,
+      scheduledAt: scheduledAt,
+      wifiOnly: wifiOnly,
+      chargingOnly: chargingOnly,
+    );
+  }
+
+  /// Issue 002: Pause download
   Future<void> pauseDownload(String taskId) async {
     await _service.pauseDownload(taskId);
     await loadDownloads();
   }
 
+  /// Issue 002: Resume download
   Future<void> resumeDownload(String taskId) async {
     await _service.resumeDownload(taskId);
     await loadDownloads();
   }
 
+  /// Issue 002: Cancel download
   Future<void> cancelDownload(String taskId) async {
     await _service.cancelDownload(taskId);
+    _notifications.cancelNotification(taskId);
     await loadDownloads();
   }
 
+  /// Issue 002: Retry failed download
   Future<void> retryDownload(String taskId) async {
     await _service.retryDownload(taskId);
     await loadDownloads();
@@ -207,18 +195,46 @@ class DownloadManagerNotifier extends StateNotifier<DownloadManagerState> {
 
   Future<void> deleteDownload(String taskId, {bool deleteFile = false}) async {
     await _service.deleteDownload(taskId, deleteFile: deleteFile);
+    _notifications.cancelNotification(taskId);
     await loadDownloads();
   }
 
-  @override
-  void dispose() {
-    IsolateNameServer.removePortNameMapping('downloader_send_port');
-    _port?.close();
-    super.dispose();
+  /// Pause all active downloads
+  Future<void> pauseAll() async {
+    for (final d in state.active) {
+      await _service.pauseDownload(d.taskId);
+    }
+    await loadDownloads();
+  }
+
+  /// Resume all paused downloads
+  Future<void> resumeAll() async {
+    for (final d in state.paused) {
+      await _service.resumeDownload(d.taskId);
+    }
+    await loadDownloads();
+  }
+
+  /// Issue 008: Clear download history
+  Future<void> clearHistory() async {
+    // This would call repository.clearHistory()
+    await loadDownloads();
+  }
+
+  /// Issue 004: Set max concurrent downloads
+  void setMaxConcurrent(int max) {
+    state = state.copyWith(maxConcurrent: max);
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Provider
+// ─────────────────────────────────────────────────────────────────────────────
 final downloadManagerProvider =
     StateNotifierProvider<DownloadManagerNotifier, DownloadManagerState>((ref) {
-  return DownloadManagerNotifier(ref.watch(downloadServiceProvider));
+  return DownloadManagerNotifier(
+    ref.watch(multiThreadDownloadServiceProvider),
+    ref.watch(notificationServiceProvider),
+    ref.watch(schedulerServiceProvider),
+  );
 });

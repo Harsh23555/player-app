@@ -5,6 +5,7 @@
     <!-- Internet Permission for downloading -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
 
     <!-- Storage permissions for Android <= 12 -->
     <uses-permission
@@ -29,7 +30,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
-    <!-- Wake lock for background playback -->
+    <!-- Wake lock for background playback / downloads -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.VIBRATE" />
 
@@ -38,6 +39,14 @@
 
     <!-- Notification -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Battery optimization and scheduling -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+
+    <!-- Camera for QR code scanning (Issue 016) -->
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-permission android:name="android.permission.CAMERA" />
 
     <application
         android:label="Nova Player"
@@ -48,7 +57,7 @@
         android:usesCleartextTraffic="true"
         tools:targetApi="29">
 
-        <!-- Main Activity -->
+        <!-- Main Activity — Issue 015: Share Intent handler -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -61,9 +70,24 @@
             <meta-data
                 android:name="io.flutter.embedding.android.NormalTheme"
                 android:resource="@style/NormalTheme" />
+            <!-- Launcher -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- Share text/URL from Chrome, Firefox, Instagram, etc. -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+            <!-- View URL -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="http" />
+                <data android:scheme="https" />
             </intent-filter>
         </activity>
 
@@ -87,6 +111,16 @@
             </intent-filter>
         </receiver>
 
+        <!-- Boot receiver for resuming downloads after reboot (Issue 002) -->
+        <receiver
+            android:name=".BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
+
         <!-- Flutter Downloader -->
         <provider
             android:name="vn.hunghd.flutterdownloader.DownloadedFileProvider"
@@ -98,7 +132,17 @@
                 android:resource="@xml/provider_paths" />
         </provider>
 
-        <!-- Download Worker -->
+        <!-- Declare customized FlutterDownloader Initializer -->
+        <provider
+            android:name="vn.hunghd.flutterdownloader.FlutterDownloaderInitializer"
+            android:authorities="${applicationId}.flutter-downloader-init"
+            android:exported="false">
+            <meta-data
+                android:name="vn.hunghd.flutterdownloader.MAX_CONCURRENT_TASKS"
+                android:value="5" />
+        </provider>
+
+        <!-- WorkManager for scheduling (Issue 012) -->
         <provider
             android:name="androidx.startup.InitializationProvider"
             android:authorities="${applicationId}.androidx-startup"

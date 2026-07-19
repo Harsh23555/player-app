@@ -7,7 +7,19 @@ allprojects {
 
 rootProject.buildDir = '../build'
 subprojects {
-    project.buildDir = "${rootProject.buildDir}/${project.name}"
+    def rootProjectAbsolute = rootProject.projectDir.absolutePath
+    def subprojectAbsolute = project.projectDir.absolutePath
+    if (rootProjectAbsolute != null && subprojectAbsolute != null && rootProjectAbsolute.length() > 0 && subprojectAbsolute.length() > 0) {
+        def rootDrive = rootProjectAbsolute.substring(0, 1)
+        def subDrive = subprojectAbsolute.substring(0, 1)
+        if (rootDrive.equalsIgnoreCase(subDrive)) {
+            project.buildDir = "${rootProject.buildDir}/${project.name}"
+        } else {
+            project.buildDir = new File(project.projectDir, "build")
+        }
+    } else {
+        project.buildDir = "${rootProject.buildDir}/${project.name}"
+    }
 }
 subprojects {
     project.evaluationDependsOn(':app')
@@ -16,3 +28,31 @@ subprojects {
 tasks.register("clean", Delete) {
     delete rootProject.buildDir
 }
+
+subprojects {
+    def configureProject = { prj ->
+        if (prj.hasProperty('android')) {
+            if (prj.android.namespace == null) {
+                prj.android.namespace = prj.group.toString()
+            }
+            prj.tasks.configureEach { task ->
+                if (task.class.name.contains("KotlinCompile") && task.hasProperty("kotlinOptions")) {
+                    def targetCompat = prj.android.compileOptions.targetCompatibility
+                    if (targetCompat != null) {
+                        task.kotlinOptions.jvmTarget = targetCompat.toString()
+                    } else {
+                        task.kotlinOptions.jvmTarget = "1.8"
+                    }
+                }
+            }
+        }
+    }
+    if (project.state.executed) {
+        configureProject(project)
+    } else {
+        project.afterEvaluate { prj ->
+            configureProject(prj)
+        }
+    }
+}
+

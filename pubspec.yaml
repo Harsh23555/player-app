@@ -1,5 +1,5 @@
 name: nova_player
-description: Nova Player - A modern local media player and downloader
+description: Nova Player - A modern download manager and media player
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -37,17 +37,36 @@ dependencies:
   path: ^1.9.0
   mime: ^1.0.5
   flutter_cache_manager: ^3.3.1
+  open_file: ^3.3.2
 
-  # Downloads
+  # Downloads — Core
   dio: ^5.4.3+1
   flutter_downloader: ^1.11.7
+  crypto: ^3.0.3
+  http: ^1.2.1
+
+  # QR Code
+  mobile_scanner: ^5.2.3
+
+  # WebView / Browser
+  webview_flutter: ^4.7.0
 
   # Database
   isar: ^3.1.0+1
   isar_flutter_libs: ^3.1.0+1
+  shared_preferences: ^2.2.3
 
   # Permissions
   permission_handler: ^11.3.1
+
+  # Notifications
+  flutter_local_notifications: ^17.2.2
+
+  # Connectivity & Network
+  connectivity_plus: ^6.0.3
+
+  # Scheduling / Background work
+  workmanager: ^0.6.0
 
   # UI
   google_fonts: ^6.2.1
@@ -57,6 +76,7 @@ dependencies:
   flutter_animate: ^4.5.0
   percent_indicator: ^4.2.4
   badges: ^3.1.2
+  fl_chart: ^0.68.0
 
   # Utils
   intl: ^0.19.0
@@ -64,13 +84,13 @@ dependencies:
   url_launcher: ^6.2.6
   share_plus: ^9.0.0
   device_info_plus: ^10.1.0
-  connectivity_plus: ^6.0.3
   equatable: ^2.0.5
   freezed_annotation: ^2.4.4
   json_annotation: ^4.9.0
   logger: ^2.3.0
   rxdart: ^0.27.7
   uuid: ^4.4.0
+  collection: ^1.18.0
 
 dev_dependencies:
   flutter_test:

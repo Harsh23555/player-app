@@ -199,6 +199,13 @@ class SettingsNotifier extends StateNotifier<SettingsEntity> {
     state = s;
     await _save();
   }
+
+  Future<void> setDownloadPath(String value) async {
+    final s = _copyState();
+    s.downloadPath = value;
+    state = s;
+    await _save();
+  }
 }
 
 final settingsProvider =
